@@ -1,0 +1,11 @@
+[package]
+name = "like-strace"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nix = { version = "0.27", features = ["ptrace"]}
+libc = "0.2"
+syscallz = "0.16"
+syscalls = "0.6"
+clap = { version = "4.4", features = ["derive"] }
