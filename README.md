@@ -1,2 +1,2 @@
-# like
-X-Like
+# X-Like
+Each folder contains a mini program
