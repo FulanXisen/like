@@ -1,10 +1,13 @@
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 use clap::Parser;
+use log::info;
 use nix::sys::ptrace;
 use syscalls::x86_64::Sysno;
 use nix::sys::wait::waitpid;
 use nix::unistd::Pid;
 use std::{
-    os::unix::process::CommandExt, process::{exit, Command}, time::{Duration, Instant}
+    os::unix::process::CommandExt, process::Command, time::{Duration, Instant}
 };
 
 #[derive(Parser, Debug)]
@@ -24,12 +27,15 @@ struct CallStats {
 }
 
 fn main() {
+    pretty_env_logger::init();
+    info!("like-strace start");
     let args = Args::parse();
     
     // 步骤2：创建子进程
-    let mut child = unsafe { Command::new(&args.command)
+    trace!("spawn child process...");
+    let child = unsafe { Command::new(&args.command)
         .args(&args.args)
-        .pre_exec(|| unsafe {
+        .pre_exec(||  {
             // 步骤3：附加ptrace
             ptrace::traceme().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             Ok(())
@@ -40,20 +46,25 @@ fn main() {
     let pid = Pid::from_raw(child.id() as i32);
     let mut stats = std::collections::HashMap::new();
     let start_time = Instant::now();
-
     // 等待子进程进入ptrace停止状态
-    waitpid(pid, None).unwrap();
-    ptrace::syscall(pid, None).unwrap();
+    trace!("wait for child process to stop...");
+    waitpid(pid, None).expect("ptrace error");
+    ptrace::syscall(pid, None).expect("continue error");
 
     loop {
         // 步骤3：等待系统调用事件
+        trace!("------------");
+        trace!("wait for syscall event...");
         match waitpid(pid, None) {
             Ok(status) => {
-                if let nix::sys::wait::WaitStatus::Exited(pid, _exit_status) = status {
+                if let nix::sys::wait::WaitStatus::Exited(_pid, _exit_status) = status {
                     break;
                 }
             }
-            Err(_) => break,
+            Err(e) => {
+                trace!("waitpid error: {:?}", e);
+                break;
+            }
         }
 
         // 步骤4：获取寄存器状态
@@ -63,13 +74,16 @@ fn main() {
 
         // 记录系统调用信息
         if !args.c {
+            trace!("syscall: {:?}, rax: {:?}", syscall, regs.orig_rax);
             println!("{:?} ({})", syscall, regs.orig_rax);
         }
 
         // 继续执行
+        trace!("continue syscall event...");
         ptrace::syscall(pid, None).unwrap();
 
         // 等待系统调用退出
+        trace!("wait for syscall exit...");
         waitpid(pid, None).unwrap();
         
         // 计算耗时
@@ -83,10 +97,16 @@ fn main() {
             }
         }
         // Handle exit_group syscall to avoid panic
-        if syscall == Sysno::exit_group {
+        // if syscall == Sysno::exit_group {
+        //     break;
+        // }
+        if let Err(e) = ptrace::syscall(pid, None) {
+            if e == nix::errno::Errno::ESRCH && syscall == Sysno::exit_group {
+                break;
+            }
+            trace!("ptrace::syscall error: {:?}", e);
             break;
         }
-        ptrace::syscall(pid, None).unwrap();
     }
 
     // 步骤5：输出统计信息
@@ -111,10 +131,5 @@ fn main() {
                 syscall
             );
         }
-    }
-    // Handle the case where the child process has already exited
-    if let Err(err) = child.wait() {
-        
-        println!("{:#?}",err);
     }
 }
