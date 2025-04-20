@@ -1,0 +1,21 @@
+[package]
+name = "deepseek_client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+egui = "0.31"                                       # GUI
+eframe = "0.31"                                     # GUI
+log = "0.4"                                         # 日志接口
+env_logger = "0.11"                                 # 日志实现
+reqwest = { version = "0.11", features = ["json"] } # HTTP 
+serde = { version = "1.0", features = ["derive"] }  # 序列化接口
+serde_json = "1.0"                                  # 序列化实现
+tokio = { version = "1.0", features = ["full"] }    # 异步运行时
+tokio-tungstenite = "0.17"
+async-openai = "0.28"                               # DeepSeek 兼容 OpenAI API
+dotenv = "0.15"                                     # 用于环境变量管理
+futures = "0.3"                                     # 流处理
+anyhow = "1.0"                                      # 异常处理
+uuid = { version = "1", features = ["v4","serde"] }         # UUID
+poll-promise = { version = "0.3", features = ["tokio"] }   # 等待异步任务
