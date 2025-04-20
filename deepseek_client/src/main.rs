@@ -11,6 +11,7 @@ use async_openai::{
 use dotenv::dotenv;
 use eframe::egui;
 use egui::ahash::HashMap;
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use futures::{channel::mpsc, StreamExt as _};
 use log::{info, trace};
 use poll_promise::Promise;
@@ -25,7 +26,7 @@ async fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DeepSeek Chat Client",
         eframe::NativeOptions::default(),
-        Box::new(|_cc| Ok(Box::new(ChatApp::default()))), // Wrap in `Ok` to match the expected type
+        Box::new(|cc| Ok(Box::new(ChatApp::new(cc)))), // Wrap in `Ok` to match the expected type
     )
 }
 
@@ -85,12 +86,72 @@ impl Default for ChatHistory {
             messages: vec![
                 ChatMessage {
                     sender: MessageSender::User,
-                    content: "Hello".to_string(),
+                    content: "你好".to_string(),
                     status: MessageStatus::Ok,
                 },
                 ChatMessage {
                     sender: MessageSender::DeepSeek,
-                    content: "Hi there!".to_string(),
+                    content: r#"以下是一个简单的 Markdown 示例程序，展示了常用的语法格式：
+
+# Markdown 示例
+
+
+# 一级标题
+## 二级标题
+### 三级标题（最多支持六级）
+
+## 文本样式
+- **粗体**
+- *斜体*
+- ~~删除线~~
+- `行内代码`
+
+## 列表
+### 无序列表
+- 项目1
+- 项目2
+  - 子项目（缩进2空格）
+
+### 有序列表
+1. 第一项
+2. 第二项
+   1. 子项（缩进3空格）
+
+## 链接与图片
+- [超链接](https://example.com)：`[文本](URL)`
+- ![图片](https://example.com/image.png)：`![替代文本](图片URL)`
+
+## 代码块
+```python
+def hello():
+    print("Hello, Markdown!")
+```  
+（用三个反引号包围，可指定语言）
+
+## 表格
+| 左对齐 | 居中对齐 | 右对齐 |
+|:-------|:-------:|-------:|
+| 单元格 | 单元格  | 单元格 |
+（用冒号控制对齐方式）
+
+## 引用
+> 这是引用内容  
+> 第二行引用  
+（用 `>` 开头）
+
+## 分隔线
+---
+（三个及以上 `-` 或 `*`）
+
+```c
+// 让我们说中文
+
+```
+效果预览：
+1. 复制到支持 Markdown 的编辑器（如 VS Code、Typora、GitHub）
+2. 或粘贴到在线工具（如 https://stackedit.io）查看渲染结果
+
+需要更复杂的示例可以告诉我具体需求哦"#.to_string(),
                     status: MessageStatus::Ok,
                 },
             ],
@@ -162,7 +223,74 @@ impl Default for ChatApp {
     }
 }
 
-impl ChatApp {}
+impl ChatApp {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::configure_fonts(&cc.egui_ctx);
+        Self::default()
+    }
+    pub fn configure_fonts(ctx: &eframe::egui::Context) -> Option<()> {
+        let font_file = Self::find_cjk_font()?;
+        info!("Font file found: {}", font_file);
+        let font_name = font_file.split('/').last()?.split('.').next()?.to_string();
+        info!("Font name: {}", font_name);
+        let font_file_bytes = std::fs::read(font_file).ok()?;
+
+        let font_data = eframe::egui::FontData::from_owned(font_file_bytes);
+        let mut font_def = eframe::egui::FontDefinitions::default();
+        font_def
+            .font_data
+            .insert(font_name.to_string(), sync::Arc::new(font_data));
+
+        let font_family = eframe::epaint::FontFamily::Proportional;
+        font_def
+            .families
+            .get_mut(&font_family)?
+            .insert(0, font_name);
+
+        ctx.set_fonts(font_def);
+        Some(())
+    }
+
+    fn find_cjk_font() -> Option<String> {
+        #[cfg(unix)]
+        {
+            use std::process::Command;
+            // linux/macOS command: fc-list
+            let output = Command::new("sh").arg("-c").arg("fc-list").output().ok()?;
+            let stdout = std::str::from_utf8(&output.stdout).ok()?;
+            #[cfg(target_os = "macos")]
+            let font_line = stdout
+                .lines()
+                .find(|line| line.contains("Regular") && line.contains("Hiragino Sans GB"))
+                .unwrap_or("/System/Library/Fonts/Hiragino Sans GB.ttc");
+            #[cfg(target_os = "linux")]
+            let font_line = stdout
+                .lines()
+                .find(|line| line.contains("Regular") && line.contains("CJK"))
+                .unwrap_or("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc");
+
+            let font_path = font_line.split(':').next()?.trim();
+            Some(font_path.to_string())
+        }
+        #[cfg(windows)]
+        {
+            let font_file = {
+                // c:/Windows/Fonts/msyh.ttc
+                let mut font_path = std::path::PathBuf::from(std::env::var("SystemRoot").ok()?);
+                font_path.push("Fonts");
+                font_path.push("Deng.ttf");
+                font_path.to_str()?.to_string().replace("\\", "/")
+            };
+            Some(font_file)
+        }
+    }
+
+    fn render_markdown(ui: &mut egui::Ui, markdown: &str) {
+        let mut cache = CommonMarkCache::default();
+        let viwer = CommonMarkViewer::new();
+        viwer.show(ui, &mut cache, markdown);
+    }
+}
 
 // Update the `update` method to use `send_message_with_history`
 impl eframe::App for ChatApp {
@@ -218,10 +346,9 @@ impl eframe::App for ChatApp {
                                 MessageStatus::ErrServer500 => "❌ (500 Internal Server Error)",
                                 MessageStatus::ErrServer503 => "❌ (503 Service Unavailable)",
                             };
-                            ui.label(format!(
-                                "{}: {} [{}]",
-                                sender_text, message.content, status_text
-                            ));
+                            ui.label(format!("{}:\n", sender_text));
+                            ChatApp::render_markdown(ui, &message.content);
+                            ui.label(format!("[{}]", status_text));
                         }
                         if self.curr_answer != "" {
                             if self.should_repaint {
@@ -299,10 +426,13 @@ impl eframe::App for ChatApp {
                                 self.curr_promise = None; // Clear the promise after handling
                             }
                         }
-                        if let Ok(v) = self.curr_recv.lock().unwrap().try_recv() {
-                            println!("Received message: {}", v);
+                        while let Ok(v) = self.curr_recv.lock().unwrap().try_recv() {
                             self.curr_answer.push_str(&v);
                         }
+                        // if let Ok(v) = self.curr_recv.lock().unwrap().try_recv() {
+                        //     println!("Received message: {}", v);
+                        //     self.curr_answer.push_str(&v);
+                        // }
                     });
                 });
             });

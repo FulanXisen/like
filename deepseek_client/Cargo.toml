@@ -1,7 +1,7 @@
 [package]
 name = "deepseek_client"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 egui = "0.31"                                       # GUI
@@ -19,3 +19,4 @@ futures = "0.3"                                     # 流处理
 anyhow = "1.0"                                      # 异常处理
 uuid = { version = "1", features = ["v4","serde"] }         # UUID
 poll-promise = { version = "0.3", features = ["tokio"] }   # 等待异步任务
+egui_commonmark = "0.20" # egui Markdown Viewer
