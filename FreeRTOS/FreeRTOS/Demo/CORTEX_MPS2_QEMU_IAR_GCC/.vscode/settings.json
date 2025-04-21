@@ -1,0 +1,14 @@
+{
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build/gcc",
+        "--enable-config",
+    ],
+    "clangd.checkUpdates": false,
+    "clangd.fallbackFlags": [],
+    "clangd.detectExtensionConflicts": true,
+    "clangd.onConfigChanged": "prompt",
+    "clangd.path": "clangd",
+    "clangd.restartAfterCrash": true,
+    "clangd.serverCompletionRanking": true,
+    "clangd.trace": "",
+}
