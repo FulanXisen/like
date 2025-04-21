@@ -1,0 +1,29 @@
+# Tweak the parse settings
+CompileFlags:                     
+
+  Compiler: gcc
+  Add: [-xc, # treat all files as C
+    -I/Users/fanyx/tools/gcc-arm-none-eabi/arm-none-eabi/include,
+    -I/Users/fanyx/me/like/FreeRTOS/FreeRTOS/Source/include,
+    -I/Users/fanyx/me/like/FreeRTOS/FreeRTOS/Source/portable/GCC/ARM_CM3,
+    -I/Users/fanyx/me/like/FreeRTOS/FreeRTOS-Plus/Source/FreeRTOS-Plus-Trace/include,
+    -I/Users/fanyx/me/like/FreeRTOS/FreeRTOS-Plus/Source/FreeRTOS-Plus-Trace/kernelports/FreeRTOS/include ] # add include for compiler's std lib        
+  # remove clang's unsupported flags of gcc
+  Remove: [-fcyclomatic-complexity, -fstack-usage]
+Index:
+  Background: Skip     # Disable slow background indexing of these files.
+  StandardLibrary: Yes
+Diagnostics:
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add: modernize*
+    Remove: modernize-use-trailing-return-type
+    CheckOptions:
+      readability-identifier-naming.VariableCase: CamelCase
+InlayHints:
+  Designators: Yes
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+Hover:
+  ShowAKA: No
